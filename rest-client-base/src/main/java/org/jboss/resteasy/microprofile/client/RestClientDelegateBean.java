@@ -57,6 +57,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.PassivationCapable;
+import jakarta.enterprise.inject.spi.Prioritized;
 import jakarta.enterprise.util.AnnotationLiteral;
 
 import org.eclipse.microprofile.config.Config;
@@ -65,7 +66,7 @@ import org.eclipse.microprofile.rest.client.RestClientBuilder;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
-public class RestClientDelegateBean<T> implements Bean<T>, PassivationCapable {
+public class RestClientDelegateBean<T> implements Bean<T>, PassivationCapable, Prioritized {
     private static final Logger LOGGER = Logger.getLogger(RestClientDelegateBean.class);
 
     public static final String REST_URL_FORMAT = "%s/mp-rest/url";
@@ -107,15 +108,19 @@ public class RestClientDelegateBean<T> implements Bean<T>, PassivationCapable {
     private final Optional<String> baseUri;
 
     private final Optional<String> configKey;
+    private final Optional<Integer> priority;
+    private final boolean isAlternative;
 
     RestClientDelegateBean(final Class<T> proxyType, final BeanManager beanManager, final Optional<String> baseUri,
-            final Optional<String> configKey) {
+            final Optional<String> configKey, final Optional<Integer> priority, final boolean isAlternative) {
         this.proxyType = proxyType;
         this.beanManager = beanManager;
         this.baseUri = baseUri;
         this.configKey = configKey;
         this.config = ConfigProvider.getConfig();
         this.scope = this.resolveScope();
+        this.priority = priority;
+        this.isAlternative = isAlternative;
     }
 
     @Override
@@ -372,7 +377,12 @@ public class RestClientDelegateBean<T> implements Bean<T>, PassivationCapable {
 
     @Override
     public boolean isAlternative() {
-        return false;
+        return isAlternative;
+    }
+
+    @Override
+    public int getPriority() {
+        return priority.orElse(Integer.MIN_VALUE);
     }
 
     private Map<String, Integer> getConfigProperties() {
@@ -428,5 +438,4 @@ public class RestClientDelegateBean<T> implements Bean<T>, PassivationCapable {
             throw new IllegalArgumentException("Ambiguous scope definition on " + proxyType + ": " + possibleScopes);
         }
     }
-
 }

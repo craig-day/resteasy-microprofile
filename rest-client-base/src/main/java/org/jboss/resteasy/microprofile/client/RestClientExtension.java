@@ -26,8 +26,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 import jakarta.enterprise.inject.spi.Bean;
@@ -51,8 +53,10 @@ public class RestClientExtension implements Extension {
             RegisterRestClient annotation = type.getAnnotatedType().getAnnotation(RegisterRestClient.class);
             Optional<String> maybeUri = extractBaseUri(annotation);
             Optional<String> maybeConfigKey = extractConfigKey(annotation);
+            Optional<Integer> maybePriority = Optional.ofNullable(type.getAnnotatedType().getAnnotation(Priority.class)).map(Priority::value);
+            boolean isAlternative = type.getAnnotatedType().isAnnotationPresent(Alternative.class);
 
-            proxyTypes.add(new RestClientData(javaClass, maybeUri, maybeConfigKey));
+            proxyTypes.add(new RestClientData(javaClass, maybeUri, maybeConfigKey, maybePriority, isAlternative));
             // no need to veto() these types because interfaces cannot become beans anyway
         } else {
             errors.add(new IllegalArgumentException("Rest client needs to be an interface " + javaClass));
@@ -72,7 +76,8 @@ public class RestClientExtension implements Extension {
     public void createProxy(@Observes AfterBeanDiscovery afterBeanDiscovery, BeanManager beanManager) {
         for (RestClientData clientData : proxyTypes) {
             afterBeanDiscovery.addBean(
-                    new RestClientDelegateBean(clientData.javaClass, beanManager, clientData.baseUri, clientData.configKey));
+                    new RestClientDelegateBean(clientData.javaClass, beanManager, clientData.baseUri,
+                        clientData.configKey, clientData.priority, clientData.isAlternative));
         }
     }
 
@@ -111,12 +116,17 @@ public class RestClientExtension implements Extension {
         private final Class<T> javaClass;
         private final Optional<String> baseUri;
         private final Optional<String> configKey;
+        private final Optional<Integer> priority;
+        private final boolean isAlternative;
 
         private RestClientData(final Class<T> javaClass, final Optional<String> baseUri,
-                final Optional<String> configKey) {
+                final Optional<String> configKey, final Optional<Integer> priority,
+                final boolean isAlternative) {
             this.javaClass = javaClass;
             this.baseUri = baseUri;
             this.configKey = configKey;
+            this.priority = priority;
+            this.isAlternative = isAlternative;
         }
 
         @Override
